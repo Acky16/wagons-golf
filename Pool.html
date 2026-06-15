@@ -1868,23 +1868,6 @@ function renderDraftTab(){
 let draftPoolId=null;
 // Fetch the actual tournament field from ESPN for the given event
 async function fetchTournamentField(espnId, eventName){
-  // For upcoming events, ESPN has no field data yet — use FALLBACK_PLAYERS directly
-  // Check by ID first, then by name, then by whether eventName suggests a known upcoming major
-  const schedEv=espnId?getEventByEspnId(espnId):null;
-  const nameMatch=!schedEv&&eventName
-    ?PGA_SCHEDULE.find(e=>(e.name||'').toLowerCase().includes((eventName||'').toLowerCase().slice(0,8)))
-    :null;
-  const ev=schedEv||nameMatch;
-  // Also detect by event name alone for robustness — if the name matches a known upcoming event
-  const today=new Date().toISOString().slice(0,10);
-  const knownUpcoming=!ev&&eventName&&PGA_SCHEDULE.some(e=>
-    (e.name||'').toLowerCase().includes((eventName||'').toLowerCase().slice(0,6))&&e.startDate>today
-  );
-  const isUpcoming=(ev&&!isEventLive(ev)&&!isEventPast(ev))||knownUpcoming;
-  if(isUpcoming){
-    return FALLBACK_PLAYERS.map(p=>({...p,worldRank:p.rank}));
-  }
-
   const urls=[];
   if(espnId){
     // ESPN core API — works for upcoming events before scoreboard has data
