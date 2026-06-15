@@ -2556,7 +2556,7 @@ function loadLeaderboard(){
       return{playerId:pk.playerId,playerName:pk.playerName,country:pk.playerCountry,
         score,position:sc?sc.position:null,status,
         inProgress:sc?!!sc.inProgress:false,
-        worldRank:sc?sc.worldRank:null,
+        worldRank:getOWGR(pk.playerName)||(sc?sc.worldRank:null),
         numComplete:sc&&sc.numComplete!=null?sc.numComplete:rounds.filter(r=>r!==null).length,
         todayToPar:sc?sc.todayToPar:null,
         rounds};
