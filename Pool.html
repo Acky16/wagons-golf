@@ -1960,14 +1960,34 @@ async function fetchTournamentField(espnId, eventName){
     }catch(e){continue;}
   }
 
+  // If ESPN failed or returned the wrong event, build field from EVENT_ODDS + OWGR
+  const oddsField=espnId&&EVENT_ODDS[String(espnId)];
+  if((!players||!players.length)&&oddsField&&oddsField.length){
+    const built=oddsField.map(([name,odds],idx)=>{
+      const wr=getOWGR(name);
+      const country=(()=>{const row=OWGR_TABLE.find(r=>r[1]===name);return row?row[2]:''})();
+      return{id:'odds-'+idx,name,country,rank:wr||999,worldRank:wr||null,athleteId:null,odds};
+    }).sort((a,b)=>(a.worldRank||9999)-(b.worldRank||9999));
+    toast('Field loaded: '+built.length+' players','success');
+    return built;
+  }
+
   if(!players||!players.length){
     return FALLBACK_PLAYERS.map(p=>({...p,worldRank:p.rank}));
   }
 
-  // If ESPN returned a suspiciously small field for a major (< 100 players),
-  // it likely returned the wrong event — use confirmed fallback instead
+  // If ESPN returned the wrong event (< 100 players for a major, or wrong event ID), fall back
   const isMajor=eventName&&/(pga championship|masters|us open|open championship)/i.test(eventName);
   if(isMajor&&players.length<100){
+    if(oddsField&&oddsField.length){
+      const built=oddsField.map(([name,odds],idx)=>{
+        const wr=getOWGR(name);
+        const country=(()=>{const row=OWGR_TABLE.find(r=>r[1]===name);return row?row[2]:''})();
+        return{id:'odds-'+idx,name,country,rank:wr||999,worldRank:wr||null,athleteId:null,odds};
+      }).sort((a,b)=>(a.worldRank||9999)-(b.worldRank||9999));
+      toast('Field loaded: '+built.length+' players','success');
+      return built;
+    }
     return FALLBACK_PLAYERS.map(p=>({...p,worldRank:p.rank}));
   }
 
