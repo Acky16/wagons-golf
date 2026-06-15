@@ -3442,22 +3442,9 @@ function renderCoachPanel(poolId){
 loadSchedule();
 if(currentUser){enterApp();}else{document.getElementById('view-onboard').style.display='flex';}
 
-/* ── SERVICE WORKER ── */
+/* ── SERVICE WORKER ── unregister stale SW so updates show immediately */
 if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js').then(reg=>{
-      console.log('SW registered');
-      // Check for updates on every load
-      reg.addEventListener('updatefound',()=>{
-        const newWorker=reg.installing;
-        newWorker.addEventListener('statechange',()=>{
-          if(newWorker.state==='installed'&&navigator.serviceWorker.controller){
-            toast('App updated \u2014 reload for the latest version');
-          }
-        });
-      });
-    }).catch(()=>console.log('SW registration skipped (file:// or dev)'));
-  });
+  navigator.serviceWorker.getRegistrations().then(regs=>{for(const r of regs)r.unregister();});
 }
 </script>
 </body>
