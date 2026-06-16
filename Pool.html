@@ -806,13 +806,13 @@ function initials(n){return String(n).split(' ').map(w=>w[0]||'').join('').toUpp
 
 /* ── STORAGE ── */
 const DB={get(k){try{return JSON.parse(localStorage.getItem('fg_'+k)||'null');}catch{return null;}},set(k,v){try{localStorage.setItem('fg_'+k,JSON.stringify(v));}catch{}},del(k){try{localStorage.removeItem('fg_'+k);}catch{}}};
-function getPools(){return DB.get('pools')||[];}function savePools(p){DB.set('pools',p);}
-function getTeams(){return DB.get('teams')||[];}function saveTeams(t){DB.set('teams',t);}
+function getPools(){return DB.get('pools')||[];}function savePools(p){DB.set('pools',p);scheduleSyncPush();}
+function getTeams(){return DB.get('teams')||[];}function saveTeams(t){DB.set('teams',t);scheduleSyncPush();}
 function getLbFavs(poolId){return new Set(DB.get('lb_favs_'+poolId)||[]);}
 function saveLbFavs(poolId,s){DB.set('lb_favs_'+poolId,[...s]);}
 function toggleLbFav(poolId,teamId,ev){if(ev)ev.stopPropagation();const f=getLbFavs(poolId);if(f.has(teamId))f.delete(teamId);else f.add(teamId);saveLbFavs(poolId,f);loadLeaderboard();}
-function getPicks(){return DB.get('picks')||[];}function savePicks(p){DB.set('picks',p);}
-function getScores(){return DB.get('scores')||[];}function saveScores(s){DB.set('scores',s);}
+function getPicks(){return DB.get('picks')||[];}function savePicks(p){DB.set('picks',p);scheduleSyncPush();}
+function getScores(){return DB.get('scores')||[];}function saveScores(s){DB.set('scores',s);scheduleSyncPush();}
 function nextId(arr){return arr.length?Math.max(...arr.map(x=>x.id))+1:1;}
 function genCode(){return Math.random().toString(36).substring(2,8).toUpperCase();}
 
@@ -940,26 +940,36 @@ function handleLogin(){
 }
 function handleLogout(){DB.del('user');currentUser=null;showView('view-onboard');}
 
-/* ── SYNC (cross-device over local network) ── */
-async function syncPush(){
+/* ── SYNC (cross-device via Netlify Blobs) ── */
+let _syncPushTimer=null;
+function scheduleSyncPush(){
+  clearTimeout(_syncPushTimer);
+  _syncPushTimer=setTimeout(()=>syncPush(true),3000);
+}
+async function syncPush(silent=false){
   const data={};
   for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k.startsWith('fg_'))data[k]=localStorage.getItem(k);}
   try{
     const r=await fetch('/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-    if(r.ok){toast('Data pushed — open Import on other devices','success');}
-    else throw new Error('Server error');
-  }catch(e){toast('Push failed: is the sync server running? (python3 sync-server.py)','error');}
+    if(!r.ok) throw new Error('Server error');
+    if(!silent) toast('Synced ✓','success');
+  }catch(e){if(!silent) toast('Sync failed','error');}
 }
-async function syncPull(){
+async function syncPull(silent=false){
   try{
     const r=await fetch('/sync');
     if(!r.ok) throw new Error('No sync data found');
     const data=await r.json();
     let count=0;
     Object.entries(data).forEach(([k,v])=>{if(k.startsWith('fg_')&&k!=='fg_user'){localStorage.setItem(k,v);count++;}});
-    toast('Imported '+count+' data items — reloading…','success');
-    setTimeout(()=>window.location.reload(),1200);
-  }catch(e){toast('Import failed: '+e.message,'error');}
+    if(silent){
+      renderHome();
+      if(document.getElementById('view-main')&&!document.getElementById('view-main').classList.contains('hidden')) loadLeaderboard();
+    } else {
+      toast('Imported '+count+' items — reloading…','success');
+      setTimeout(()=>window.location.reload(),1200);
+    }
+  }catch(e){if(!silent) toast('Import failed: '+e.message,'error');}
 }
 
 function isCommissioner(poolId){
@@ -983,6 +993,7 @@ function enterApp(){
   document.getElementById('nav-username').textContent=currentUser.userName;
   document.getElementById('nav-username2').textContent=currentUser.userName;
   showView('view-main');showTab('home');
+  syncPull(true); // auto-pull latest data on every app load
 }
 
 /* ── VIEWS ── */
