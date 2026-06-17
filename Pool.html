@@ -2946,6 +2946,12 @@ async function espnFetchCompetitors(espnId,poolEventName){
   urls.push('https://site.api.espn.com/apis/site/v2/sports/golf/leaderboard?event='+espnId);
   urls.push(ESPN_GOLF+'/leaderboard?event='+espnId);
   urls.push(ESPN_GOLF+'/scoreboard?event='+espnId);
+  // date-based scoreboard — confirmed to return correct event even pre-tournament
+  if(dateParam){
+    const endDate=schedEv&&schedEv.endDate?schedEv.endDate.replace(/-/g,''):null;
+    if(endDate) urls.push(ESPN_GOLF+'/scoreboard?dates='+dateParam+'-'+endDate);
+    urls.push(ESPN_GOLF+'/scoreboard?dates='+dateParam);
+  }
   urls.push(ESPN_GOLF+'/scoreboard');
   for(const url of urls){
     try{
