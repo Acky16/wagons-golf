@@ -815,7 +815,7 @@ function saveLbFavs(poolId,s){DB.set('lb_favs_'+poolId,[...s]);}
 function toggleLbFav(poolId,teamId,ev){if(ev)ev.stopPropagation();const f=getLbFavs(poolId);if(f.has(teamId))f.delete(teamId);else f.add(teamId);saveLbFavs(poolId,f);loadLeaderboard();}
 function getPicks(){return DB.get('picks')||[];}function savePicks(p){DB.set('picks',p);scheduleSyncPush();}
 function getScores(){return DB.get('scores')||[];}function saveScores(s){DB.set('scores',s);scheduleSyncPush();}
-function nextId(arr){return arr.length?Math.max(...arr.map(x=>x.id))+1:1;}
+function nextId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 function genCode(){return Math.random().toString(36).substring(2,8).toUpperCase();}
 
 /* ── SCHEDULE ── */
@@ -1402,9 +1402,9 @@ function createPool(){
   const pools=getPools(),teams=getTeams();
   let code=genCode();while(pools.some(p=>p.joinCode===code))code=genCode();
   const scoring=Math.max(1,Math.min(ppt,parseInt(document.getElementById('create-scoring').value)||ppt));
-  const pool={id:nextId(pools),name,eventId:ev.id,eventName:ev.name,espnEventId:ev.espnId,playersPerTeam:ppt,scoringPlayers:scoring,draftStatus:'not_started',currentDraftTeamIndex:0,currentDraftRound:1,joinCode:code,createdBy:currentUser.userId};
+  const pool={id:nextId(),name,eventId:ev.id,eventName:ev.name,espnEventId:ev.espnId,playersPerTeam:ppt,scoringPlayers:scoring,draftStatus:'not_started',currentDraftTeamIndex:0,currentDraftRound:1,joinCode:code,createdBy:currentUser.userId};
   pools.push(pool);savePools(pools);
-  teams.push({id:nextId(teams),poolId:pool.id,name:teamName,ownerName:currentUser.userName,userId:currentUser.userId,draftOrder:1});
+  teams.push({id:nextId(),poolId:pool.id,name:teamName,ownerName:currentUser.userName,userId:currentUser.userId,draftOrder:1});
   saveTeams(teams);
   closeModal('create');
   document.getElementById('create-pool-name').value='';
@@ -1413,17 +1413,26 @@ function createPool(){
   document.getElementById('create-scoring').value='4';
   toast('Pool created! Share code: '+code,'success');renderHome();
 }
-function joinPool(){
+async function joinPool(){
   const code=document.getElementById('join-code').value.trim().toUpperCase();
   const teamName=document.getElementById('join-team-name').value.trim();
   if(!code||!teamName){toast('Fill in all fields','error');return;}
-  const pools=getPools();
-  const pool=pools.find(p=>p.joinCode===code);
-  if(!pool){toast('Pool not found. Check the code.','error');return;}
+  let pools=getPools();
+  let pool=pools.find(p=>p.joinCode===code);
+  if(!pool){
+    // Pool might not be synced yet — pull first then retry
+    toast('Syncing…','');
+    await syncPull(true);
+    pools=getPools();
+    pool=pools.find(p=>p.joinCode===code);
+    if(!pool){toast('Pool not found. Check the code.','error');return;}
+  }
   if(pool.draftStatus==='completed'){toast("Draft is already complete.",'error');return;}
   const teams=getTeams();
-  if(teams.some(t=>t.poolId===pool.id&&t.userId===currentUser.userId)){toast("You've already joined.",'error');return;}
-  teams.push({id:nextId(teams),poolId:pool.id,name:teamName,ownerName:currentUser.userName,userId:currentUser.userId,draftOrder:teams.filter(t=>t.poolId===pool.id).length+1});
+  const deleted=getDeletedIds();
+  const activeTeams=teams.filter(t=>!deleted.has(t.id));
+  if(activeTeams.some(t=>t.poolId===pool.id&&t.userId===currentUser.userId)){toast("You've already joined.",'error');return;}
+  teams.push({id:nextId(),poolId:pool.id,name:teamName,ownerName:currentUser.userName,userId:currentUser.userId,draftOrder:activeTeams.filter(t=>t.poolId===pool.id).length+1});
   saveTeams(teams);
   closeModal('join');document.getElementById('join-code').value='';document.getElementById('join-team-name').value='';
   toast('Joined pool: '+pool.name,'success');renderHome();
@@ -1558,7 +1567,7 @@ function addTeam(){
   if(!pool){toast('No pool selected','error');return;}
   if(pool.draftStatus!=='not_started'){toast('Cannot add teams after draft starts','error');return;}
   const teams=getTeams();
-  teams.push({id:nextId(teams),poolId:currentPoolId,name,ownerName:owner,userId:'u_guest_'+Math.random().toString(36).slice(2,9),draftOrder:teams.filter(t=>t.poolId===currentPoolId).length+1});
+  teams.push({id:nextId(),poolId:currentPoolId,name,ownerName:owner,userId:'u_guest_'+Math.random().toString(36).slice(2,9),draftOrder:teams.filter(t=>t.poolId===currentPoolId).length+1});
   saveTeams(teams);closeModal('addteam');document.getElementById('addteam-name').value='';document.getElementById('addteam-owner').value='';renderPoolDetail();
 }
 function deleteTeam(id){
@@ -2227,7 +2236,7 @@ function draftPlayer(playerId,playerName,playerCountry){
   const commish=isCommissioner(draftPoolId);
   if(!ct||(! myTeamsTurn&&!commish)){toast('Not your turn!','error');return;}
   const pickNumber=pp.length+1,roundNumber=pool.currentDraftRound;
-  picks.push({id:nextId(picks),poolId:draftPoolId,teamId:ct.id,playerId,playerName,playerCountry,roundNumber,pickNumber});
+  picks.push({id:nextId(),poolId:draftPoolId,teamId:ct.id,playerId,playerName,playerCountry,roundNumber,pickNumber});
   savePicks(picks);
   const total=pool.playersPerTeam*teams.length,done=pickNumber>=total;
   let ni=pool.currentDraftTeamIndex,nr=pool.currentDraftRound;
@@ -2557,7 +2566,7 @@ function assignBulkPicks(){
     const player=PGA_PLAYERS.find(p=>p.id===playerId);
     // Dedupe by name (not ID) so old picks with shifted IDs don't let duplicates through
     if(!player||poolPicks.some(p=>nmLocal(p.playerName)===nmLocal(player.name))) return;
-    allPicks.push({id:nextId(allPicks),poolId:draftPoolId,teamId:bulkTeamId,playerId,
+    allPicks.push({id:nextId(),poolId:draftPoolId,teamId:bulkTeamId,playerId,
       playerName:player.name,playerCountry:player.country,roundNumber:1,pickNumber:pickNumber++});
   });
   savePicks(allPicks);
