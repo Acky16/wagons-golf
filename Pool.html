@@ -612,9 +612,12 @@ option{background:var(--card2);color:var(--text);}
             <input type="text" id="player-search" placeholder="Search by name or country&hellip;" oninput="renderPlayers()" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
             <button id="search-clear" onclick="document.getElementById('player-search').value='';renderPlayers();this.style.display='none';" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);cursor:pointer;font-size:1rem;padding:0;line-height:1;">&#x2715;</button>
           </div></div>
-          <div style="display:flex;align-items:center;padding:5px 1.5rem 5px 1.5rem;border-bottom:1px solid var(--border);gap:1rem;">
+          <div style="display:flex;align-items:center;padding:5px 1rem 5px 1.5rem;border-bottom:1px solid var(--border);gap:0.5rem;">
             <span style="font-family:var(--font-mono);font-size:0.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;width:36px;text-align:right;padding-right:8px;flex-shrink:0;">WR</span>
             <span style="font-size:0.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;flex:1;">Player · Odds</span>
+            <span style="font-size:0.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-right:2px;">Sort:</span>
+            <button id="draft-sort-rank" class="field-sort-btn active" onclick="setDraftSort('rank')" style="font-size:0.65rem;padding:2px 7px;">Ranking</button>
+            <button id="draft-sort-odds" class="field-sort-btn" onclick="setDraftSort('odds')" style="font-size:0.65rem;padding:2px 7px;">Odds</button>
           </div>
           <div class="players-list" id="players-list"></div>
         </div>
@@ -1923,6 +1926,12 @@ function renderDraftTab(){
 }
 
 let draftPoolId=null;
+let playerSortBy='rank';
+function setDraftSort(by){
+  playerSortBy=by;
+  document.querySelectorAll('#draft-sort-rank,#draft-sort-odds').forEach(b=>b.classList.toggle('active',b.id==='draft-sort-'+by));
+  renderPlayers();
+}
 let _draftPollTimer=null;
 function startDraftPoll(){
   stopDraftPoll();
@@ -2188,6 +2197,13 @@ function renderPlayers(){
   const filtered=PGA_PLAYERS.filter(p=>!q||p.name.toLowerCase().includes(q)||p.country.toLowerCase().includes(q));
   const parseOdds=o=>{if(!o)return Infinity;const n=parseInt(String(o).replace('+',''),10);return isNaN(n)?Infinity:n;};
   const sorted=filtered.slice().sort((a,b)=>{
+    if(playerSortBy==='odds'){
+      const oa=parseOdds(a.odds),ob=parseOdds(b.odds);
+      if(oa!==ob) return oa-ob;
+      const wa=a.worldRank&&a.worldRank<900?a.worldRank:999;
+      const wb=b.worldRank&&b.worldRank<900?b.worldRank:999;
+      return wa-wb;
+    }
     const wa=a.worldRank&&a.worldRank<900?a.worldRank:null;
     const wb=b.worldRank&&b.worldRank<900?b.worldRank:null;
     if(wa!==null&&wb!==null) return wa-wb;
