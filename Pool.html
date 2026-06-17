@@ -960,8 +960,29 @@ async function syncPull(silent=false){
     const r=await fetch('/sync');
     if(!r.ok) throw new Error('No sync data found');
     const data=await r.json();
+    // Merge arrays by id rather than replace — prevents entries from one device
+    // wiping entries added on another device before their push landed on the server.
+    const mergeById=(server,local)=>{
+      const map=new Map();
+      (server||[]).forEach(x=>map.set(x.id,x));
+      (local||[]).forEach(x=>{if(!map.has(x.id))map.set(x.id,x);});
+      return [...map.values()];
+    };
+    const MERGE_KEYS=['fg_pools','fg_teams','fg_picks'];
     let count=0;
-    Object.entries(data).forEach(([k,v])=>{if(k.startsWith('fg_')&&k!=='fg_user'){localStorage.setItem(k,v);count++;}});
+    Object.entries(data).forEach(([k,v])=>{
+      if(!k.startsWith('fg_')||k==='fg_user') return;
+      if(MERGE_KEYS.includes(k)){
+        try{
+          const server=JSON.parse(v);
+          const local=JSON.parse(localStorage.getItem(k)||'[]');
+          localStorage.setItem(k,JSON.stringify(mergeById(server,local)));
+        }catch{localStorage.setItem(k,v);}
+      } else {
+        localStorage.setItem(k,v);
+      }
+      count++;
+    });
     if(silent){
       renderHome();
       if(document.getElementById('view-main')&&!document.getElementById('view-main').classList.contains('hidden')) loadLeaderboard();
