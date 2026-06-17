@@ -975,9 +975,10 @@ async function syncPull(silent=false){
       try{const srv=JSON.parse(data['fg_deleted_ids']);srv.forEach(id=>deleted.add(id));DB.set('deleted_ids',[...deleted]);}catch{}
     }
     const MERGE_KEYS=['fg_pools','fg_teams','fg_picks'];
+    const SKIP_KEYS=['fg_user','fg_deleted_ids']; // handled separately above
     let count=0;
     Object.entries(data).forEach(([k,v])=>{
-      if(!k.startsWith('fg_')||k==='fg_user') return;
+      if(!k.startsWith('fg_')||SKIP_KEYS.includes(k)) return;
       if(MERGE_KEYS.includes(k)){
         try{
           const server=JSON.parse(v);
@@ -1922,6 +1923,17 @@ function renderDraftTab(){
 }
 
 let draftPoolId=null;
+let _draftPollTimer=null;
+function startDraftPoll(){
+  stopDraftPoll();
+  _draftPollTimer=setInterval(async()=>{
+    if(!draftPoolId)return stopDraftPoll();
+    await syncPull(true);
+    renderDraftRoom();
+    renderDraftSidebar();
+  },8000);
+}
+function stopDraftPoll(){clearInterval(_draftPollTimer);_draftPollTimer=null;}
 // Fetch the actual tournament field from ESPN for the given event
 async function fetchTournamentField(espnId, eventName){
   const urls=[];
@@ -2102,6 +2114,7 @@ async function fetchTournamentField(espnId, eventName){
 
 async function enterDraftRoom(id){
   draftPoolId=id;
+  await syncPull(true); // ensure latest teams/picks before entering
   const pool=getPools().find(p=>p.id===id);
   if(!pool) return;
   showView('view-main');
@@ -2130,8 +2143,10 @@ async function enterDraftRoom(id){
     if(s) s.focus();
   },300);
   renderDraftRoom();
+  startDraftPoll();
 }
 function closeDraftRoom(){
+  stopDraftPoll();
   draftPoolId=null;
   document.getElementById('draft-pool-list').style.display='';
   document.getElementById('draft-room').style.display='none';
