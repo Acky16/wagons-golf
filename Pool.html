@@ -806,6 +806,8 @@ function initials(n){return String(n).split(' ').map(w=>w[0]||'').join('').toUpp
 
 /* ── STORAGE ── */
 const DB={get(k){try{return JSON.parse(localStorage.getItem('fg_'+k)||'null');}catch{return null;}},set(k,v){try{localStorage.setItem('fg_'+k,JSON.stringify(v));}catch{}},del(k){try{localStorage.removeItem('fg_'+k);}catch{}}};
+function getDeletedIds(){return new Set(DB.get('deleted_ids')||[]);}
+function recordDeleted(...ids){const s=getDeletedIds();ids.forEach(id=>s.add(id));DB.set('deleted_ids',[...s]);scheduleSyncPush();}
 function getPools(){return DB.get('pools')||[];}function savePools(p){DB.set('pools',p);scheduleSyncPush();}
 function getTeams(){return DB.get('teams')||[];}function saveTeams(t){DB.set('teams',t);scheduleSyncPush();}
 function getLbFavs(poolId){return new Set(DB.get('lb_favs_'+poolId)||[]);}
@@ -960,14 +962,18 @@ async function syncPull(silent=false){
     const r=await fetch('/sync');
     if(!r.ok) throw new Error('No sync data found');
     const data=await r.json();
-    // Merge arrays by id rather than replace — prevents entries from one device
-    // wiping entries added on another device before their push landed on the server.
+    // Merge arrays by id — union of server+local, minus anything locally deleted.
+    const deleted=getDeletedIds();
     const mergeById=(server,local)=>{
       const map=new Map();
       (server||[]).forEach(x=>map.set(x.id,x));
       (local||[]).forEach(x=>{if(!map.has(x.id))map.set(x.id,x);});
-      return [...map.values()];
+      return [...map.values()].filter(x=>!deleted.has(x.id));
     };
+    // Also merge incoming deleted_ids with local ones
+    if(data['fg_deleted_ids']){
+      try{const srv=JSON.parse(data['fg_deleted_ids']);srv.forEach(id=>deleted.add(id));DB.set('deleted_ids',[...deleted]);}catch{}
+    }
     const MERGE_KEYS=['fg_pools','fg_teams','fg_picks'];
     let count=0;
     Object.entries(data).forEach(([k,v])=>{
@@ -1429,6 +1435,9 @@ function deletePool(id){
   if(!confirm(msg))return;
   if(isCreator){
     // Full delete — remove everything
+    const teamIds=getTeams().filter(t=>t.poolId===id).map(t=>t.id);
+    const pickIds=getPicks().filter(p=>p.poolId===id).map(p=>p.id);
+    recordDeleted(id,...teamIds,...pickIds);
     savePools(getPools().filter(p=>p.id!==id));
     saveTeams(getTeams().filter(t=>t.poolId!==id));
     savePicks(getPicks().filter(p=>p.poolId!==id));
@@ -1436,6 +1445,8 @@ function deletePool(id){
     toast('Pool deleted');
   } else {
     // Just remove my team from this pool
+    const myTeams=getTeams().filter(t=>t.poolId===id&&t.userId===currentUser.userId);
+    recordDeleted(...myTeams.map(t=>t.id));
     saveTeams(getTeams().filter(t=>!(t.poolId===id&&t.userId===currentUser.userId)));
     toast('Left pool');
   }
@@ -1529,6 +1540,9 @@ function deletePoolFromDetail(id){
     ?'Delete this pool and all draft history? This cannot be undone.'
     :'Delete this pool and all its data?';
   if(!confirm(msg))return;
+  const teamIds=getTeams().filter(t=>t.poolId===id).map(t=>t.id);
+  const pickIds=getPicks().filter(p=>p.poolId===id).map(p=>p.id);
+  recordDeleted(id,...teamIds,...pickIds);
   savePools(getPools().filter(p=>p.id!==id));
   saveTeams(getTeams().filter(t=>t.poolId!==id));
   savePicks(getPicks().filter(p=>p.poolId!==id));
@@ -1550,6 +1564,7 @@ function addTeam(){
 function deleteTeam(id){
   const pool=getPools().find(p=>p.id===currentPoolId);
   if(pool&&pool.draftStatus!=='not_started'){toast('Cannot remove after draft starts','error');return;}
+  recordDeleted(id);
   saveTeams(getTeams().filter(t=>t.id!==id));renderPoolDetail();
 }
 function resetDraft(id){
@@ -2388,6 +2403,7 @@ function renderBulkPlayers(){
         const ap=getPicks();
         const found=ap.find(x=>x.id===pk.id);
         if(found){
+          recordDeleted(pk.id);
           savePicks(ap.filter(x=>x.id!==pk.id));
           const pools2=getPools();
           const pl=pools2.find(x=>x.id===draftPoolId);
