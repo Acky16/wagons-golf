@@ -977,12 +977,31 @@ async function syncPull(silent=false){
     if(data['fg_deleted_ids']){
       try{const srv=JSON.parse(data['fg_deleted_ids']);srv.forEach(id=>deleted.add(id));DB.set('deleted_ids',[...deleted]);}catch{}
     }
-    const MERGE_KEYS=['fg_pools','fg_teams','fg_picks'];
+    // For pools, prefer whichever copy is further along in the draft (higher round×1000+index)
+    // so a stale server response never rolls back the live turn counter.
+    const draftProgress=p=>(p.currentDraftRound||1)*1000+(p.currentDraftTeamIndex||0)+(p.draftStatus==='completed'?1e6:0);
+    const mergeByIdPools=(server,local)=>{
+      const map=new Map();
+      (server||[]).forEach(x=>map.set(x.id,x));
+      (local||[]).forEach(x=>{
+        if(deleted.has(x.id)) return;
+        const existing=map.get(x.id);
+        if(!existing||draftProgress(x)>draftProgress(existing)) map.set(x.id,x);
+      });
+      return [...map.values()].filter(x=>!deleted.has(x.id));
+    };
+    const MERGE_KEYS=['fg_teams','fg_picks'];
     const SKIP_KEYS=['fg_user','fg_deleted_ids']; // handled separately above
     let count=0;
     Object.entries(data).forEach(([k,v])=>{
       if(!k.startsWith('fg_')||SKIP_KEYS.includes(k)) return;
-      if(MERGE_KEYS.includes(k)){
+      if(k==='fg_pools'){
+        try{
+          const server=JSON.parse(v);
+          const local=JSON.parse(localStorage.getItem(k)||'[]');
+          localStorage.setItem(k,JSON.stringify(mergeByIdPools(server,local)));
+        }catch{localStorage.setItem(k,v);}
+      } else if(MERGE_KEYS.includes(k)){
         try{
           const server=JSON.parse(v);
           const local=JSON.parse(localStorage.getItem(k)||'[]');
@@ -2277,6 +2296,7 @@ function draftPlayer(playerId,playerName,playerCountry){
     else{if(ni>0)ni--;else{nr++;ni=0;}}
   }
   savePools(getPools().map(p=>p.id===draftPoolId?{...p,draftStatus:done?'completed':'in_progress',currentDraftTeamIndex:ni,currentDraftRound:nr}:p));
+  syncPush(true); // push immediately so other devices see the updated turn right away
   toast(playerName+' drafted!','success');renderDraftRoom();
 }
 
