@@ -1026,17 +1026,28 @@ function isCommissioner(poolId){
   const pool=getPools().find(p=>p.id===poolId);
   return !!(pool&&pool.createdBy===currentUser.userId);
 }
+// Derive current team index purely from pick count — never drifts out of sync.
+function snakeTeamIndex(picksDone, numTeams){
+  if(!numTeams) return 0;
+  const round=Math.floor(picksDone/numTeams); // 0-indexed
+  const pos=picksDone%numTeams;
+  return round%2===0 ? pos : numTeams-1-pos;
+}
+function snakeRound(picksDone, numTeams){
+  return Math.floor((numTeams?picksDone/numTeams:0))+1;
+}
 function canPickNow(poolId){
-  // You can pick if it's your team's turn OR you're the commissioner
   const pool=getPools().find(p=>p.id===poolId);if(!pool||pool.draftStatus==='completed')return false;
   const teams=getTeams().filter(t=>t.poolId===poolId).sort((a,b)=>a.draftOrder-b.draftOrder);
-  const ct=teams[pool.currentDraftTeamIndex];if(!ct)return false;
+  const picks=getPicks().filter(p=>p.poolId===poolId);
+  const ct=teams[snakeTeamIndex(picks.length,teams.length)];if(!ct)return false;
   return ct.userId===currentUser.userId||isCommissioner(poolId);
 }
 function currentTeamForPool(poolId){
   const pool=getPools().find(p=>p.id===poolId);if(!pool)return null;
   const teams=getTeams().filter(t=>t.poolId===poolId).sort((a,b)=>a.draftOrder-b.draftOrder);
-  return teams[pool.currentDraftTeamIndex]||null;
+  const picks=getPicks().filter(p=>p.poolId===poolId);
+  return teams[snakeTeamIndex(picks.length,teams.length)]||null;
 }
 function enterApp(){
   ['nav-avatar','nav-avatar2','nav-avatar3'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=initials(currentUser.userName);});
@@ -2186,10 +2197,11 @@ function renderDraftRoom(){
   const teams=getTeams().filter(t=>t.poolId===draftPoolId).sort((a,b)=>a.draftOrder-b.draftOrder);
   const picks=getPicks().filter(p=>p.poolId===draftPoolId);
   const total=pool.playersPerTeam*teams.length,done=pool.draftStatus==='completed';
+  const ctIdx=snakeTeamIndex(picks.length,teams.length);
   document.getElementById('hud-pick').textContent=Math.min(done?total:picks.length+1,total);
-  document.getElementById('hud-round').textContent=pool.currentDraftRound;
+  document.getElementById('hud-round').textContent=snakeRound(picks.length,teams.length);
   document.getElementById('hud-progress').style.width=(total>0?Math.min(100,Math.round(picks.length/total*100)):0)+'%';
-  const ct=!done?teams[pool.currentDraftTeamIndex]:null;
+  const ct=!done?teams[ctIdx]:null;
   document.getElementById('hud-team').textContent=ct?ct.name:done?'Draft Complete':'—';
   const myTurn=!done&&ct&&ct.userId===currentUser.userId;
   const commish=!done&&isCommissioner(draftPoolId);
@@ -2206,7 +2218,7 @@ function renderPlayers(){
   const teams=getTeams().filter(t=>t.poolId===draftPoolId).sort((a,b)=>a.draftOrder-b.draftOrder);
   const picks=getPicks().filter(p=>p.poolId===draftPoolId);
   const done=pool.draftStatus==='completed';
-  const ct=!done?teams[pool.currentDraftTeamIndex]:null;
+  const ct=!done?teams[snakeTeamIndex(picks.length,teams.length)]:null;
   const myTurn=!done&&ct&&ct.userId===currentUser.userId;
   const canPick=myTurn||(!done&&ct&&isCommissioner(draftPoolId));
   const q=document.getElementById('player-search').value.toLowerCase();
@@ -2281,21 +2293,15 @@ function draftPlayer(playerId,playerName,playerCountry){
   const teams=getTeams().filter(t=>t.poolId===draftPoolId).sort((a,b)=>a.draftOrder-b.draftOrder);
   const picks=getPicks(),pp=picks.filter(p=>p.poolId===draftPoolId);
   if(pp.some(p=>p.playerId===playerId)){toast('Player already drafted','error');return;}
-  const ct=teams[pool.currentDraftTeamIndex];
+  const ct=teams[snakeTeamIndex(pp.length,teams.length)];
   const myTeamsTurn=ct&&ct.userId===currentUser.userId;
   const commish=isCommissioner(draftPoolId);
   if(!ct||(! myTeamsTurn&&!commish)){toast('Not your turn!','error');return;}
-  const pickNumber=pp.length+1,roundNumber=pool.currentDraftRound;
+  const pickNumber=pp.length+1,roundNumber=snakeRound(pp.length,teams.length);
   picks.push({id:nextId(),poolId:draftPoolId,teamId:ct.id,playerId,playerName,playerCountry,roundNumber,pickNumber});
   savePicks(picks);
   const total=pool.playersPerTeam*teams.length,done=pickNumber>=total;
-  let ni=pool.currentDraftTeamIndex,nr=pool.currentDraftRound;
-  if(!done){
-    const even=roundNumber%2===0;
-    if(!even){if(ni<teams.length-1)ni++;else{nr++;ni=teams.length-1;}}
-    else{if(ni>0)ni--;else{nr++;ni=0;}}
-  }
-  savePools(getPools().map(p=>p.id===draftPoolId?{...p,draftStatus:done?'completed':'in_progress',currentDraftTeamIndex:ni,currentDraftRound:nr}:p));
+  savePools(getPools().map(p=>p.id===draftPoolId?{...p,draftStatus:done?'completed':'in_progress'}:p));
   syncPush(true); // push immediately so other devices see the updated turn right away
   toast(playerName+' drafted!','success');renderDraftRoom();
 }
