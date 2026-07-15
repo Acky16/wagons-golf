@@ -1296,7 +1296,7 @@ function openPoolLeaderboard(id){
   }
 }
 function openLbPoolOverview(){
-  const poolId=parseInt(document.getElementById('lb-pool-select').value);
+  const poolId=document.getElementById('lb-pool-select').value;
   if(poolId) openPoolDetail(poolId);
 }
 function switchLbView(view){
@@ -2696,7 +2696,7 @@ function renderLeaderboard(){
   loadLeaderboard();
 }
 function loadLeaderboard(){
-  const poolId=parseInt(document.getElementById('lb-pool-select').value);
+  const poolId=document.getElementById('lb-pool-select').value;
   const content=document.getElementById('lb-content');
   if(!poolId){content.innerHTML='<div class="empty"><div class="empty-icon">\uD83C\uDFC6</div><div class="empty-title">Select a pool</div></div>';document.getElementById('lb-last-updated').textContent='';return;}
   const pool=getPools().find(p=>p.id===poolId);
@@ -3155,7 +3155,7 @@ async function refreshPoolDetailScores(){
   toast(r.unmatched.length?r.matched+'/'+r.total+' matched':'Live scores · '+r.matched+' updated',r.unmatched.length?'':'success');
 }
 async function refreshScores(){
-  const poolId=parseInt(document.getElementById('lb-pool-select').value);
+  const poolId=document.getElementById('lb-pool-select').value;
   if(!poolId){toast('Select a pool first','error');return;}
   captureRankSnapshot(poolId); // snapshot ranks before refresh so we can show ▲▼ deltas
   const btn=document.getElementById('refresh-btn'),icon=document.getElementById('refresh-icon');
@@ -3181,7 +3181,7 @@ async function refreshScores(){
 /* ── TOURNAMENT STANDINGS ── */
 let standingsEspnId=null;
 function openLbTournament(){
-  const poolId=parseInt(document.getElementById('lb-pool-select').value);
+  const poolId=document.getElementById('lb-pool-select').value;
   const pool=getPools().find(p=>p.id===poolId);
   if(pool&&pool.espnEventId) openTournamentStandings(pool.espnEventId);
 }
@@ -3465,7 +3465,7 @@ function startAutoRefresh(poolId){
     autoRefreshSecs--;
     if(autoRefreshSecs<=0){
       autoRefreshSecs=AUTO_REFRESH_INTERVAL;
-      const pid=parseInt(document.getElementById('lb-pool-select').value);
+      const pid=document.getElementById('lb-pool-select').value;
       if(pid){
         captureRankSnapshot(pid);
         fetchAndSaveScores(pid).then(r=>{if(r.ok)loadLeaderboard();});
