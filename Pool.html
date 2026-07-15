@@ -415,6 +415,11 @@ option{background:var(--card2);color:var(--text);}
   padding:4px 10px;font-size:0.72rem;font-weight:600;cursor:pointer;font-family:var(--font-body);transition:all 0.15s;}
 .field-sort-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
 .field-sort-btn:hover:not(.active){border-color:var(--border2);color:var(--text2);}
+.view-toggle{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:0.6rem;}
+.view-toggle-btn{padding:7px 14px;font-size:0.8rem;font-weight:600;cursor:pointer;border:none;background:none;color:var(--text3);font-family:var(--font-body);transition:all 0.15s;border-radius:0;}
+.view-toggle-btn:first-child{border-right:1px solid var(--border);}
+.view-toggle-btn.active{background:var(--accent-dim);color:var(--accent);}
+.view-toggle-btn:hover:not(.active){background:var(--card);color:var(--text2);}
 .draft-mode-tab{padding:5px 14px;font-size:0.8rem;font-weight:500;color:var(--text3);cursor:pointer;
   border-radius:6px;transition:all 0.15s;border:none;background:none;font-family:var(--font-body);}
 .draft-mode-tab.active{color:var(--text);background:var(--card2);}
@@ -653,10 +658,13 @@ option{background:var(--card2);color:var(--text);}
         <div class="auto-refresh-info" id="auto-refresh-info" style="display:none;"></div>
         <div id="lb-source-badge" style="display:none;margin-top:4px;font-size:0.72rem;color:var(--accent);opacity:0.8;"></div>
         <button class="back" onclick="lbBack()" style="margin-top:0.6rem;">&larr; Back</button>
-        <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.4rem;flex-wrap:wrap;">
-          <button class="btn btn-outline" id="lb-overview-btn" style="display:none;padding:7px 12px;font-size:0.78rem;" onclick="openLbPoolOverview()">Pool Overview</button>
-          <button class="btn btn-outline" id="lb-tournament-btn" style="display:none;padding:7px 12px;font-size:0.78rem;" onclick="openLbTournament()">Scores</button>
+        <div id="lb-view-toggle" style="display:none;">
+          <div class="view-toggle">
+            <button class="view-toggle-btn active" id="lb-toggle-lb" onclick="switchLbView('leaderboard')">&#9650; Leaderboard</button>
+            <button class="view-toggle-btn" id="lb-toggle-overview" onclick="switchLbView('overview')">&#9632; Pool Overview</button>
+          </div>
         </div>
+        <button class="btn btn-outline" id="lb-tournament-btn" style="display:none;padding:7px 12px;font-size:0.78rem;margin-top:0.4rem;" onclick="openLbTournament()">Scores</button>
       </div>
       <div class="flex-row">
         <select class="pool-select" id="lb-pool-select" onchange="loadLeaderboard()"><option value="">Select pool&hellip;</option></select>
@@ -700,7 +708,10 @@ option{background:var(--card2);color:var(--text);}
       <div class="action-bar" id="detail-actions">
         <button id="btn-enter-draft" class="btn btn-gold" style="display:none;padding:8px 14px;font-size:0.82rem;" onclick="enterDraftRoom(currentPoolId)">Enter Draft Room</button>
         <button id="btn-randomize" class="btn btn-outline" style="display:none;padding:8px 14px;font-size:0.82rem;" onclick="randomizeDraftOrder(currentPoolId)">&#127922; Randomize Order</button>
-        <button id="btn-view-lb" class="btn btn-outline" style="display:none;padding:8px 14px;font-size:0.82rem;" onclick="lbReturnToPool=true;lbTargetPoolId=currentPoolId;showView('view-main');showTab('leaderboard')">View Leaderboard</button>
+        <div id="btn-view-lb" style="display:none;"><div class="view-toggle">
+          <button class="view-toggle-btn" onclick="openPoolLeaderboard(currentPoolId)">&#9650; Leaderboard</button>
+          <button class="view-toggle-btn active">&#9632; Pool Overview</button>
+        </div></div>
         <button id="btn-refresh-scores" class="btn btn-outline" style="display:none;padding:8px 14px;font-size:0.82rem;" onclick="refreshPoolDetailScores()">&#8635; Refresh Scores</button>
         <button id="btn-reset-draft" class="btn btn-danger" style="display:none;padding:8px 14px;font-size:0.82rem;" onclick="resetDraft(currentPoolId)">Reset Draft</button>
         <button id="btn-delete-pool" class="btn btn-danger" style="padding:8px 14px;font-size:0.82rem;" onclick="deletePoolFromDetail(currentPoolId)">Delete Pool</button>
@@ -1267,7 +1278,13 @@ function openPoolLeaderboard(id){
   lbTargetPoolId=id;
   showView('view-main');
   showTab('leaderboard');
-  // Also auto-fetch scores if live
+  // Set toggle to Leaderboard active
+  setTimeout(()=>{
+    const lb=document.getElementById('lb-toggle-lb');
+    const ov=document.getElementById('lb-toggle-overview');
+    if(lb) lb.classList.add('active');
+    if(ov) ov.classList.remove('active');
+  },30);
   const pool=getPools().find(p=>p.id===id);
   if(pool&&pool.draftStatus==='completed'&&pool.espnEventId){
     const ev=getEventByEspnId(pool.espnEventId);
@@ -1281,6 +1298,11 @@ function openPoolLeaderboard(id){
 function openLbPoolOverview(){
   const poolId=parseInt(document.getElementById('lb-pool-select').value);
   if(poolId) openPoolDetail(poolId);
+}
+function switchLbView(view){
+  document.getElementById('lb-toggle-lb').classList.toggle('active',view==='leaderboard');
+  document.getElementById('lb-toggle-overview').classList.toggle('active',view==='overview');
+  if(view==='overview') openLbPoolOverview();
 }
 function openPoolDetail(id){
   currentPoolId=id;renderPoolDetail();showView('view-pool');
@@ -1373,9 +1395,10 @@ function renderPoolDetail(){
     });
     const isMine=team.userId===currentUser.userId;
     const emptySlots=pool.playersPerTeam-tp.length;
-    // Compute team total: best N scores where N = scoringPlayers
+    // Compute team total: best N scores where N = scoringPlayers; withdrawn players don't count
     const scoringCount=(pool.scoringPlayers)||tp.length;
-    const scorable=tp.map(p=>resolveScore(p)).filter(s=>s!==null).sort((a,b)=>a-b);
+    const getStatus=pk=>{const sc=scoreMap[pk.playerId]||(pk.playerName?scoreMapByName[nmPD(pk.playerName)]:null);return sc?sc.status:'active';};
+    const scorable=tp.filter(p=>getStatus(p)!=='withdrawn').map(p=>resolveScore(p)).filter(s=>s!==null).sort((a,b)=>a-b);
     const teamTotal=scorable.length?scorable.slice(0,scoringCount).reduce((a,b)=>a+b,0):null;
     const card=document.createElement('div');
     card.className='team-card'+(isMine?' mine':'');
@@ -1579,9 +1602,10 @@ function renderFieldList(){
 }
 function deletePoolFromDetail(id){
   const pool=getPools().find(p=>p.id===id);
+  const name=pool?'"'+pool.name+'"':'this pool';
   const msg=pool&&pool.draftStatus==='completed'
-    ?'Delete this pool and all draft history? This cannot be undone.'
-    :'Delete this pool and all its data?';
+    ?'Delete '+name+' and all draft history? This cannot be undone.'
+    :'Delete '+name+' and all its data? This cannot be undone.';
   if(!confirm(msg))return;
   const teamIds=getTeams().filter(t=>t.poolId===id).map(t=>t.id);
   const pickIds=getPicks().filter(p=>p.poolId===id).map(p=>p.id);
@@ -1934,7 +1958,7 @@ const FALLBACK_PLAYERS=[
 function renderDraftTab(){
   const pools=getPools(),teams=getTeams();
   const my=pools; // show all synced pools regardless of which device created them
-  const draftable=my.filter(p=>p.draftStatus!=='completed'&&teams.filter(t=>t.poolId===p.id).length>=2);
+  const draftable=my.filter(p=>p.draftStatus!=='completed'&&teams.filter(t=>t.poolId===p.id).length>=1);
   const grid=document.getElementById('draft-pools-grid'),empty=document.getElementById('draft-pools-empty');
   if(!draftable.length){grid.innerHTML='';empty.style.display='block';return;}
   empty.style.display='none';
@@ -2732,7 +2756,7 @@ function loadLeaderboard(){
         rounds};
     });
     const scoringCount=(pool&&pool.scoringPlayers)||players.length;
-    const scorable=players.filter(p=>p.score!==null).map(p=>p.score).sort((a,b)=>a-b);
+    const scorable=players.filter(p=>p.score!==null&&p.status!=='withdrawn').map(p=>p.score).sort((a,b)=>a-b);
     const counting=scorable.slice(0,scoringCount);
     const ownsWinner=winnerTeamId===team.id;
     return{team,players,total:counting.length?counting.reduce((a,b)=>a+b,0):null,scoringCount,ownsWinner};
@@ -2760,9 +2784,9 @@ function loadLeaderboard(){
   // Show "Scores" button if this pool has a linked tournament
   const tournBtn=document.getElementById('lb-tournament-btn');
   if(tournBtn) tournBtn.style.display=pool&&pool.espnEventId?'':'none';
-  // Show "Pool Overview" button whenever a pool is selected
-  const overviewBtn=document.getElementById('lb-overview-btn');
-  if(overviewBtn) overviewBtn.style.display=pool?'':'none';
+  // Show view toggle whenever a pool is selected
+  const toggleWrap=document.getElementById('lb-view-toggle');
+  if(toggleWrap) toggleWrap.style.display=pool?'':'none';
 
   // My rank banner (BTW: always see your position at top)
   renderMyRankBanner(poolId);
