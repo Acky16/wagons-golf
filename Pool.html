@@ -973,7 +973,7 @@ async function syncPush(silent=false){
 }
 async function syncPull(silent=false){
   try{
-    const r=await fetch('/sync');
+    const r=await fetch('/sync?_='+Date.now());
     if(!r.ok) throw new Error('No sync data found');
     const data=await r.json();
     // Merge arrays by id — union of server+local, minus anything locally deleted.
