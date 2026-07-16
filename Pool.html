@@ -1334,11 +1334,10 @@ function renderPoolDetail(){
   badge.innerHTML='<div class="status-dot"></div><span>'+lm[pool.draftStatus]+'</span>';
   const ev=pool.espnEventId?getEventByEspnId(pool.espnEventId):null;
   const evLiveOrPast=ev&&(isEventLive(ev)||isEventPast(ev));
-  document.getElementById('btn-enter-draft').style.display = (pool.draftStatus!=='completed'&&teams.length>=2) ? '' : 'none';
+  document.getElementById('btn-enter-draft').style.display = teams.length>=1 ? '' : 'none';
   document.getElementById('btn-randomize').style.display   = (pool.draftStatus==='not_started'&&teams.length>=2) ? '' : 'none';
-  // Hide Add Team button once draft has started
   const addTeamBtn=document.querySelector('#view-pool .btn[onclick*="addteam"]');
-  if(addTeamBtn) addTeamBtn.style.display=pool.draftStatus==='not_started'?'':'none';
+  if(addTeamBtn) addTeamBtn.style.display='';
   document.getElementById('btn-view-lb').style.display    = pool.draftStatus==='completed' ? '' : 'none';
   document.getElementById('btn-refresh-scores').style.display = (pool.draftStatus==='completed'&&evLiveOrPast) ? '' : 'none';
   document.getElementById('btn-reset-draft').style.display = pool.draftStatus==='in_progress' ? '' : 'none';
@@ -1484,7 +1483,6 @@ async function joinPool(){
     pool=pools.find(p=>p.joinCode===code);
     if(!pool){toast('Pool not found. Check the code.','error');return;}
   }
-  if(pool.draftStatus==='completed'){toast("Draft is already complete.",'error');return;}
   const teams=getTeams();
   const deleted=getDeletedIds();
   const activeTeams=teams.filter(t=>!deleted.has(t.id));
@@ -1623,14 +1621,12 @@ function addTeam(){
   if(!name||!owner){toast('Fill in all fields','error');return;}
   const pool=getPools().find(p=>p.id===currentPoolId);
   if(!pool){toast('No pool selected','error');return;}
-  if(pool.draftStatus!=='not_started'){toast('Cannot add teams after draft starts','error');return;}
   const teams=getTeams();
   teams.push({id:nextId(),poolId:currentPoolId,name,ownerName:owner,userId:'u_guest_'+Math.random().toString(36).slice(2,9),draftOrder:teams.filter(t=>t.poolId===currentPoolId).length+1});
   saveTeams(teams);closeModal('addteam');document.getElementById('addteam-name').value='';document.getElementById('addteam-owner').value='';renderPoolDetail();
 }
 function deleteTeam(id){
   const pool=getPools().find(p=>p.id===currentPoolId);
-  if(pool&&pool.draftStatus!=='not_started'){toast('Cannot remove after draft starts','error');return;}
   recordDeleted(id);
   saveTeams(getTeams().filter(t=>t.id!==id));renderPoolDetail();
 }
@@ -2238,14 +2234,15 @@ async function enterDraftRoom(id){
   showTab('draft');
   document.getElementById('draft-pool-list').style.display='none';
   document.getElementById('draft-room').style.display='flex';
-  // Reset to live draft mode
-  draftMode='live'; bulkTeamId=null; bulkSelections.clear();
-  document.querySelectorAll('.draft-mode-tab').forEach(b=>b.classList.toggle('active',b.dataset.mode==='live'));
-  document.getElementById('draft-live-panel').style.display='';
-  document.getElementById('draft-bulk-panel').style.display='none';
-  document.getElementById('player-search').value='';
   document.getElementById('draft-pool-name').textContent=pool.name;
   if(pool.draftStatus==='not_started')savePools(getPools().map(p=>p.id===id?{...p,draftStatus:'in_progress'}:p));
+  // If draft is already complete, open in bulk mode so commissioner can still add/edit picks
+  const startInBulk=pool.draftStatus==='completed';
+  draftMode=startInBulk?'bulk':'live'; bulkTeamId=null; bulkSelections.clear();
+  document.querySelectorAll('.draft-mode-tab').forEach(b=>b.classList.toggle('active',b.dataset.mode===draftMode));
+  document.getElementById('draft-live-panel').style.display=startInBulk?'none':'';
+  document.getElementById('draft-bulk-panel').style.display=startInBulk?'':'none';
+  document.getElementById('player-search').value='';
 
   // Show loading state while we fetch the live field
   const list=document.getElementById('players-list');
