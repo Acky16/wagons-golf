@@ -1060,13 +1060,20 @@ function currentTeamForPool(poolId){
   const picks=getPicks().filter(p=>p.poolId===poolId);
   return teams[snakeTeamIndex(picks.length,teams.length)]||null;
 }
+let _bgPollTimer=null;
+function startBgPoll(){
+  if(_bgPollTimer)return;
+  _bgPollTimer=setInterval(()=>{if(!draftPoolId)syncPull(true);},30000);
+}
 function enterApp(){
   ['nav-avatar','nav-avatar2','nav-avatar3'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=initials(currentUser.userName);});
   document.getElementById('nav-username').textContent=currentUser.userName;
   document.getElementById('nav-username2').textContent=currentUser.userName;
   showView('view-main');showTab('home');
   syncPull(true); // auto-pull latest data on every app load
+  startBgPoll();
 }
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&currentUser)syncPull(true);});
 
 /* ── VIEWS ── */
 function showView(id){
