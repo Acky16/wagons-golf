@@ -2937,13 +2937,13 @@ function loadLeaderboard(){
           +fmtDelta(rankDelta)
           +'</div><div class="lb-owner">'+esc(t.team.ownerName)+'</div></td>'
         +'<td class="lb-score '+sc(t.total)+'">'+fs(t.total)+'</td>'
-        +'<td><button class="lb-fav-btn'+(isPinned?' active':'')+'" title="'+(isPinned?'Unpin':'Pin to top')+'" onclick="toggleLbFav('+poolId+','+t.team.id+',event)">\u2605</button></td></tr>'
+        +'<td><button class="lb-fav-btn'+(isPinned?' active':'')+'" title="'+(isPinned?'Unpin':'Pin to top')+'" onclick="toggleLbFav(\''+poolId+'\',\''+t.team.id+'\',event)">\u2605</button></td></tr>'
         +'<tr class="lb-expanded-row" id="lb-exp-'+t.team.id+'"><td colspan="4" class="lb-expanded-cell"><div class="player-scores">'+rs+'</div></td></tr>';
     }).join('')+'</tbody></table>'
     +(!ts.length?'<div class="empty"><div class="empty-text">No teams yet.</div></div>':'');
 
   content.querySelectorAll('.lb-row').forEach(row=>{
-    row.addEventListener('click',()=>toggleLBRow(parseInt(row.dataset.teamId)));
+    row.addEventListener('click',()=>toggleLBRow(row.dataset.teamId));
   });
 }
 function toggleLBRow(id){document.getElementById('lb-exp-'+id).classList.toggle('open');}
