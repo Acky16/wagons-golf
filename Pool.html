@@ -1074,6 +1074,7 @@ function enterApp(){
   startBgPoll();
 }
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&currentUser)syncPull(true);});
+window.addEventListener('pagehide',()=>{if(_syncPushTimer){clearTimeout(_syncPushTimer);syncPush(true);}});
 
 /* ── VIEWS ── */
 function showView(id){
@@ -1475,6 +1476,7 @@ function createPool(){
   document.getElementById('create-ppt').value='8';
   document.getElementById('create-scoring').value='4';
   toast('Pool created! Share code: '+code,'success');renderHome();
+  syncPush(true); // push immediately so other devices see the new pool right away
 }
 async function joinPool(){
   const code=document.getElementById('join-code').value.trim().toUpperCase();
